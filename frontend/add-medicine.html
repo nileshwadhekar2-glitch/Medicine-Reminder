@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MediRemind – Add Medicine</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- Toast -->
+<div class="toast" id="toast">
+  <span id="toast-msg">Notification</span>
+  <span class="toast-close" onclick="closeToast()">✕</span>
+</div>
+
+<div class="page-wrapper">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-icon">💊</div>
+      <h1>Medi<span>Remind</span></h1>
+    </div>
+    <nav class="sidebar-nav">
+      <a class="nav-item" href="dashboard.html">    <span class="icon">🏠</span> Dashboard</a>
+      <a class="nav-item" href="medicines.html">    <span class="icon">💉</span> My Medicines</a>
+      <a class="nav-item active" href="add-medicine.html"><span class="icon">➕</span> Add Medicine</a>
+      <a class="nav-item" href="schedule.html">     <span class="icon">📅</span> Today's Schedule</a>
+      <a class="nav-item" href="history.html">      <span class="icon">📋</span> Dose History</a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-info">
+        <div class="user-avatar" id="user-avatar">U</div>
+        <div>
+          <div class="user-name" id="user-name">User</div>
+          <div class="user-email"><a href="#" onclick="logout()" style="color:var(--danger);font-size:11px">Logout</a></div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content">
+
+    <div class="page-header">
+      <h2>➕ Add New Medicine</h2>
+      <p>Fill in the details of your medicine below</p>
+    </div>
+
+    <div class="card" style="max-width:680px">
+
+      <div class="error-msg" id="error-msg" style="display:none"></div>
+
+      <form id="add-medicine-form" onsubmit="handleAddMedicine(event)">
+
+        <!-- Name & Dosage -->
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="med-name">Medicine Name *</label>
+            <input class="form-control" id="med-name" type="text" placeholder="e.g. Vitamin C" required />
+          </div>
+          <div class="form-group">
+            <label for="med-dosage">Dosage *</label>
+            <input class="form-control" id="med-dosage" type="text" placeholder="e.g. 500mg / 1 tablet" required />
+          </div>
+        </div>
+
+        <!-- Frequency & Reminder Time -->
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="med-frequency">Frequency *</label>
+            <select class="form-control" id="med-frequency" required>
+              <option value="">-- Select --</option>
+              <option value="Once daily">Once daily</option>
+              <option value="Twice daily">Twice daily</option>
+              <option value="Three times daily">Three times daily</option>
+              <option value="Every alternate day">Every alternate day</option>
+              <option value="Weekly">Weekly</option>
+              <option value="As needed">As needed</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="med-time">Reminder Time *</label>
+            <input class="form-control" id="med-time" type="time" required />
+            <label for="med-times">Dose times (HH:MM, separated by commas)</label>
+            <input class="form-control" id="med-times" placeholder="08:00, 20:00" />
+            <small>For twice or three times daily, enter every dose time prescribed to you. Otherwise leave blank.</small>
+          </div>
+        </div>
+
+        <!-- Start & End Date -->
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="med-start">Start Date *</label>
+            <input class="form-control" id="med-start" type="date" required />
+          </div>
+          <div class="form-group">
+            <label for="med-end">End Date *</label>
+            <input class="form-control" id="med-end" type="date" required />
+          </div>
+        </div>
+
+        <!-- Instructions -->
+        <div class="form-group">
+          <label for="med-instructions">Instructions (optional)</label>
+          <textarea class="form-control" id="med-instructions" rows="3"
+            placeholder="e.g. Take after meals, with water…" style="resize:vertical"></textarea>
+        </div>
+
+        <!-- Actions -->
+        <div style="display:flex;gap:12px;margin-top:8px">
+          <button type="submit" class="btn btn-primary" id="submit-btn">
+            💾 Save Medicine
+          </button>
+          <a href="medicines.html" class="btn btn-outline">Cancel</a>
+        </div>
+
+      </form>
+    </div>
+
+  </main>
+</div>
+
+<script src="script.js"></script>
+<script>
+  const API   = (location.protocol === "file:" ? "http://127.0.0.1:8000" : location.origin);
+  const token = localStorage.getItem("token");
+  if (!token) window.location.href = "index.html";
+
+  const username = localStorage.getItem("username") || "User";
+  document.getElementById("user-name").textContent   = username;
+  document.getElementById("user-avatar").textContent = username.charAt(0).toUpperCase();
+
+  // Set default start date to today
+  document.getElementById("med-start").value = localDate();
+
+  function logout() { for (const key of ["token", "user_id", "username"]) localStorage.removeItem(key); window.location.href = "index.html"; }
+
+  function showToast(msg) {
+    const el = document.getElementById("toast");
+    document.getElementById("toast-msg").textContent = msg;
+    el.classList.add("show");
+    setTimeout(() => el.classList.remove("show"), 3000);
+  }
+  function closeToast() { document.getElementById("toast").classList.remove("show"); }
+
+  async function handleAddMedicine(e) {
+    e.preventDefault();
+
+    const errEl = document.getElementById("error-msg");
+    errEl.style.display = "none";
+
+    const name         = document.getElementById("med-name").value.trim();
+    const dosage       = document.getElementById("med-dosage").value.trim();
+    const frequency    = document.getElementById("med-frequency").value;
+    const reminder_time = document.getElementById("med-time").value;
+    const start_date   = document.getElementById("med-start").value;
+    const end_date     = document.getElementById("med-end").value;
+    const instructions = document.getElementById("med-instructions").value.trim();
+
+    if (new Date(end_date) < new Date(start_date)) {
+      errEl.textContent = "End date cannot be before start date.";
+      errEl.style.display = "block";
+      return;
+    }
+
+    const btn = document.getElementById("submit-btn");
+    btn.textContent = "Saving…";
+    btn.disabled = true;
+
+    try {
+      // 1. Add the medicine
+      const res  = await fetch(`${API}/medicines`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: token },
+        body: JSON.stringify({ name, dosage, frequency, reminder_time, start_date, end_date, instructions, reminder_times: document.getElementById("med-times").value.split(",").map(t => t.trim()).filter(Boolean) }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Failed to add medicine");
+
+      showToast("✅ Medicine added successfully!");
+      setTimeout(() => window.location.href = "medicines.html", 1500);
+
+    } catch (err) {
+      errEl.textContent = err.message;
+      errEl.style.display = "block";
+    } finally {
+      btn.textContent = "💾 Save Medicine";
+      btn.disabled = false;
+    }
+  }
+</script>
+
+</body>
+</html>

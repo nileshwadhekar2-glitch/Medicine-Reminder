@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MediRemind – Login</title>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    /* tiny override – center the icon inside the card */
+    .auth-logo .logo-icon { color: #fff; }
+  </style>
+</head>
+<body class="auth-page">
+
+  <div class="auth-card">
+
+    <!-- Logo -->
+    <div class="auth-logo">
+      <div class="logo-icon">💊</div>
+      <h1>MediRemind</h1>
+      <p>Your personal medicine reminder</p>
+    </div>
+
+    <!-- Tabs -->
+    <div class="auth-tabs">
+      <div class="auth-tab active" id="tab-login" onclick="switchTab('login')">Login</div>
+      <div class="auth-tab"        id="tab-signup" onclick="switchTab('signup')">Sign Up</div>
+    </div>
+
+    <!-- Error message -->
+    <div class="error-msg" id="error-msg"></div>
+
+    <!-- ── Login Form ── -->
+    <form class="auth-form active" id="form-login" onsubmit="handleLogin(event)">
+      <div class="form-group">
+        <label for="login-email">Email Address</label>
+        <input class="form-control" id="login-email" type="email" placeholder="you@email.com" required />
+      </div>
+      <div class="form-group">
+        <label for="login-password">Password</label>
+        <input class="form-control" id="login-password" type="password" placeholder="••••••••" required />
+      </div>
+      <button type="submit" class="btn btn-primary btn-full" id="login-btn">
+        Login
+      </button>
+      <p style="text-align:center;margin-top:14px;font-size:13px;color:var(--muted)">
+        Don't have an account?
+        <a href="#" onclick="switchTab('signup')" style="color:var(--primary);font-weight:600">Sign Up</a>
+      </p>
+    </form>
+
+    <!-- ── Signup Form ── -->
+    <form class="auth-form" id="form-signup" onsubmit="handleSignup(event)">
+      <div class="form-group">
+        <label for="signup-name">Full Name</label>
+        <input class="form-control" id="signup-name" type="text" placeholder="John Doe" required />
+      </div>
+      <div class="form-group">
+        <label for="signup-email">Email Address</label>
+        <input class="form-control" id="signup-email" type="email" placeholder="you@email.com" required />
+      </div>
+      <div class="form-group">
+        <label for="signup-password">Password</label>
+        <input class="form-control" id="signup-password" type="password" placeholder="min 6 characters" minlength="6" required />
+      </div>
+      <button type="submit" class="btn btn-primary btn-full" id="signup-btn">
+        Create Account
+      </button>
+      <p style="text-align:center;margin-top:14px;font-size:13px;color:var(--muted)">
+        Already have an account?
+        <a href="#" onclick="switchTab('login')" style="color:var(--primary);font-weight:600">Login</a>
+      </p>
+    </form>
+
+  </div><!-- /auth-card -->
+
+  <script src="script.js"></script>
+<script>
+    const API = (location.protocol === "file:" ? "http://127.0.0.1:8000" : location.origin);
+
+    // Redirect if already logged in
+    if (localStorage.getItem("token")) {
+      window.location.href = "dashboard.html";
+    }
+
+    /* ── Tab switching ── */
+    function switchTab(tab) {
+      document.getElementById("tab-login").classList.toggle("active",  tab === "login");
+      document.getElementById("tab-signup").classList.toggle("active", tab === "signup");
+      document.getElementById("form-login").classList.toggle("active",  tab === "login");
+      document.getElementById("form-signup").classList.toggle("active", tab === "signup");
+      hideError();
+    }
+
+    function showError(msg) {
+      const el = document.getElementById("error-msg");
+      el.textContent = msg;
+      el.style.display = "block";
+    }
+    function hideError() {
+      document.getElementById("error-msg").style.display = "none";
+    }
+
+    /* ── Login ── */
+    async function handleLogin(e) {
+      e.preventDefault();
+      hideError();
+      const btn = document.getElementById("login-btn");
+      btn.textContent = "Logging in…";
+      btn.disabled = true;
+
+      const email    = document.getElementById("login-email").value.trim();
+      const password = document.getElementById("login-password").value;
+
+      try {
+        const res  = await fetch(`${API}/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Login failed");
+
+        // Save user info to localStorage
+        localStorage.setItem("token",    data.token);
+        localStorage.setItem("user_id",  data.user_id);
+        localStorage.setItem("username", data.username);
+
+        window.location.href = "dashboard.html";
+      } catch (err) {
+        showError(err.message);
+      } finally {
+        btn.textContent = "Login";
+        btn.disabled = false;
+      }
+    }
+
+    /* ── Signup ── */
+    async function handleSignup(e) {
+      e.preventDefault();
+      hideError();
+      const btn = document.getElementById("signup-btn");
+      btn.textContent = "Creating account…";
+      btn.disabled = true;
+
+      const username = document.getElementById("signup-name").value.trim();
+      const email    = document.getElementById("signup-email").value.trim();
+      const password = document.getElementById("signup-password").value;
+
+      try {
+        const res  = await fetch(`${API}/signup`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username, email, password }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Signup failed");
+
+        // Auto-login after signup
+        localStorage.setItem("token",    data.token);
+        localStorage.setItem("user_id",  data.user_id);
+        localStorage.setItem("username", data.username);
+
+        window.location.href = "dashboard.html";
+      } catch (err) {
+        showError(err.message);
+      } finally {
+        btn.textContent = "Create Account";
+        btn.disabled = false;
+      }
+    }
+  </script>
+
+</body>
+</html>

@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MediRemind – My Medicines</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- Toast -->
+<div class="toast" id="toast">
+  <span id="toast-msg">Notification</span>
+  <span class="toast-close" onclick="closeToast()">✕</span>
+</div>
+
+<!-- Edit Modal -->
+<div class="modal-overlay" id="edit-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 class="modal-title">✏️ Edit Medicine</h3>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <form onsubmit="handleEditSave(event)">
+      <input type="hidden" id="edit-id" />
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Medicine Name</label>
+          <input class="form-control" id="edit-name" type="text" required />
+        </div>
+        <div class="form-group">
+          <label>Dosage</label>
+          <input class="form-control" id="edit-dosage" type="text" required />
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Frequency</label>
+          <select class="form-control" id="edit-frequency" required>
+            <option value="Once daily">Once daily</option>
+            <option value="Twice daily">Twice daily</option>
+            <option value="Three times daily">Three times daily</option>
+            <option value="Every alternate day">Every alternate day</option>
+            <option value="Weekly">Weekly</option>
+            <option value="As needed">As needed</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Reminder Time</label>
+          <input class="form-control" id="edit-time" type="time" required />
+            <label for="edit-times">Dose times (HH:MM, separated by commas)</label>
+            <input class="form-control" id="edit-times" placeholder="08:00, 20:00" />
+            <small>For twice or three times daily, enter every dose time prescribed to you. Otherwise leave blank.</small>
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Start Date</label>
+          <input class="form-control" id="edit-start" type="date" required />
+        </div>
+        <div class="form-group">
+          <label>End Date</label>
+          <input class="form-control" id="edit-end" type="date" required />
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Instructions</label>
+        <textarea class="form-control" id="edit-instructions" rows="2" style="resize:vertical"></textarea>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:6px">
+        <button type="submit" class="btn btn-primary">💾 Save Changes</button>
+        <button type="button" class="btn btn-outline" onclick="closeModal()">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="page-wrapper">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-icon">💊</div>
+      <h1>Medi<span>Remind</span></h1>
+    </div>
+    <nav class="sidebar-nav">
+      <a class="nav-item" href="dashboard.html">    <span class="icon">🏠</span> Dashboard</a>
+      <a class="nav-item active" href="medicines.html"><span class="icon">💉</span> My Medicines</a>
+      <a class="nav-item" href="add-medicine.html">  <span class="icon">➕</span> Add Medicine</a>
+      <a class="nav-item" href="schedule.html">      <span class="icon">📅</span> Today's Schedule</a>
+      <a class="nav-item" href="history.html">       <span class="icon">📋</span> Dose History</a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-info">
+        <div class="user-avatar" id="user-avatar">U</div>
+        <div>
+          <div class="user-name" id="user-name">User</div>
+          <div class="user-email"><a href="#" onclick="logout()" style="color:var(--danger);font-size:11px">Logout</a></div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content">
+
+    <div class="page-header" style="display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <h2>💉 My Medicines</h2>
+        <p>Manage all your medicines here</p>
+      </div>
+      <a href="add-medicine.html" class="btn btn-primary">➕ Add Medicine</a>
+    </div>
+
+    <div class="card">
+      <div class="table-wrapper">
+        <table id="medicine-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Medicine Name</th>
+              <th>Dosage</th>
+              <th>Frequency</th>
+              <th>Reminder Time</th>
+              <th>End Date</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="medicine-tbody">
+            <tr><td colspan="7" style="text-align:center;padding:40px;color:var(--muted)">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script src="script.js"></script>
+<script>
+  const API   = (location.protocol === "file:" ? "http://127.0.0.1:8000" : location.origin);
+  const token = localStorage.getItem("token");
+  if (!token) window.location.href = "index.html";
+
+  const username = localStorage.getItem("username") || "User";
+  document.getElementById("user-name").textContent   = username;
+  document.getElementById("user-avatar").textContent = username.charAt(0).toUpperCase();
+
+  function logout() { for (const key of ["token", "user_id", "username"]) localStorage.removeItem(key); window.location.href = "index.html"; }
+
+  function showToast(msg) {
+    const el = document.getElementById("toast");
+    document.getElementById("toast-msg").textContent = msg;
+    el.classList.add("show");
+    setTimeout(() => el.classList.remove("show"), 3000);
+  }
+  function closeToast() { document.getElementById("toast").classList.remove("show"); }
+
+  function formatTime(t) {
+    if (!t) return "–";
+    const [h, m] = t.split(":").map(Number);
+    const ampm = h >= 12 ? "PM" : "AM";
+    return `${String(h % 12 || 12).padStart(2,"0")}:${String(m).padStart(2,"0")} ${ampm}`;
+  }
+
+  let medicinesCache = [];
+  // ── Load medicines ──
+  async function loadMedicines() {
+    const tbody = document.getElementById("medicine-tbody");
+    try {
+      const res  = await fetch(`${API}/medicines`, { headers: { Authorization: token } });
+      const data = await res.json();
+      const medicines = data.medicines || [];
+      medicinesCache = medicines;
+
+      if (!medicines.length) {
+        tbody.innerHTML = `<tr><td colspan="7">
+          <div class="empty-state">
+            <div class="empty-icon">💊</div>
+            <p>No medicines added yet. <a href="add-medicine.html" style="color:var(--primary)">Add one</a></p>
+          </div></td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = medicines.map((m, i) => `
+        <tr>
+          <td>${i + 1}</td>
+          <td><strong>${escapeHtml(m.name)}</strong>${m.instructions ? `<br><small style="color:var(--muted)">${escapeHtml(m.instructions)}</small>` : ""}</td>
+          <td>${escapeHtml(m.dosage)}</td>
+          <td><span class="badge badge-info">${escapeHtml(m.frequency)}</span></td>
+          <td>⏰ ${formatTime(m.reminder_time)}</td>
+          <td>${escapeHtml(m.end_date)}</td>
+          <td>
+            <button class="btn btn-warning btn-sm" onclick="openEditModal(medicinesCache[${i}])">✏️ Edit</button>
+            <button class="btn btn-danger  btn-sm" style="margin-left:6px" onclick="deleteMedicine(medicinesCache[${i}].id, medicinesCache[${i}].name)">🗑️ Delete</button>
+          </td>
+        </tr>`).join("");
+    } catch (e) {
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--danger)">Error loading medicines.</td></tr>`;
+    }
+  }
+
+  // ── Edit modal ──
+  function openEditModal(m) {
+    document.getElementById("edit-times").value = ((m.reminder_times || []).length > 1 ? m.reminder_times : []).join(", ");
+    document.getElementById("edit-id").value           = m.id;
+    document.getElementById("edit-name").value         = m.name;
+    document.getElementById("edit-dosage").value       = m.dosage;
+    document.getElementById("edit-frequency").value    = m.frequency;
+    document.getElementById("edit-time").value         = m.reminder_time;
+    document.getElementById("edit-start").value        = m.start_date;
+    document.getElementById("edit-end").value          = m.end_date;
+    document.getElementById("edit-instructions").value = m.instructions || "";
+    document.getElementById("edit-modal").classList.add("open");
+  }
+  function closeModal() {
+    document.getElementById("edit-modal").classList.remove("open");
+  }
+
+  async function handleEditSave(e) {
+    e.preventDefault();
+    const id = document.getElementById("edit-id").value;
+    const payload = {
+      reminder_times: document.getElementById("edit-times").value.split(",").map(t => t.trim()).filter(Boolean),
+      name:         document.getElementById("edit-name").value.trim(),
+      dosage:       document.getElementById("edit-dosage").value.trim(),
+      frequency:    document.getElementById("edit-frequency").value,
+      reminder_time: document.getElementById("edit-time").value,
+      start_date:   document.getElementById("edit-start").value,
+      end_date:     document.getElementById("edit-end").value,
+      instructions: document.getElementById("edit-instructions").value.trim(),
+    };
+
+    try {
+      const res = await fetch(`${API}/medicines/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: token },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error("Update failed");
+      closeModal();
+      showToast("✅ Medicine updated!");
+      loadMedicines();
+    } catch (err) {
+      showToast("❌ " + err.message);
+    }
+  }
+
+  // ── Delete ──
+  async function deleteMedicine(id, name) {
+    if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
+    try {
+      await fetch(`${API}/medicines/${id}`, { method: "DELETE", headers: { Authorization: token } });
+      showToast(`🗑️ "${name}" deleted`);
+      loadMedicines();
+    } catch (e) {
+      showToast("❌ Failed to delete");
+    }
+  }
+
+  loadMedicines();
+</script>
+
+</body>
+</html>

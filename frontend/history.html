@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MediRemind – Dose History</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- Toast -->
+<div class="toast" id="toast">
+  <span id="toast-msg">Notification</span>
+  <span class="toast-close" onclick="closeToast()">✕</span>
+</div>
+
+<div class="page-wrapper">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-icon">💊</div>
+      <h1>Medi<span>Remind</span></h1>
+    </div>
+    <nav class="sidebar-nav">
+      <a class="nav-item" href="dashboard.html">    <span class="icon">🏠</span> Dashboard</a>
+      <a class="nav-item" href="medicines.html">    <span class="icon">💉</span> My Medicines</a>
+      <a class="nav-item" href="add-medicine.html"> <span class="icon">➕</span> Add Medicine</a>
+      <a class="nav-item" href="schedule.html">     <span class="icon">📅</span> Today's Schedule</a>
+      <a class="nav-item active" href="history.html"><span class="icon">📋</span> Dose History</a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-info">
+        <div class="user-avatar" id="user-avatar">U</div>
+        <div>
+          <div class="user-name" id="user-name">User</div>
+          <div class="user-email"><a href="#" onclick="logout()" style="color:var(--danger);font-size:11px">Logout</a></div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content">
+
+    <div class="page-header" style="display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <h2>📋 Dose History</h2>
+        <p>Complete record of all doses taken or skipped</p>
+      </div>
+      <!-- Filter -->
+      <div style="display:flex;gap:10px;align-items:center">
+        <select class="form-control" id="filter-status" onchange="applyFilter()" style="width:140px">
+          <option value="all">All Doses</option>
+          <option value="taken">✅ Taken</option>
+          <option value="skipped">⏭️ Skipped</option>
+        </select>
+        <button class="btn btn-outline" onclick="loadHistory()">🔄 Refresh</button>
+      </div>
+    </div>
+
+    <!-- Summary -->
+    <div class="stats-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:24px">
+      <div class="stat-card">
+        <div class="stat-icon blue">📋</div>
+        <div><div class="stat-value" id="h-total">–</div><div class="stat-label">Total Records</div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon green">✅</div>
+        <div><div class="stat-value" id="h-taken">–</div><div class="stat-label">Doses Taken</div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon amber">⏭️</div>
+        <div><div class="stat-value" id="h-skipped">–</div><div class="stat-label">Doses Skipped</div></div>
+      </div>
+    </div>
+
+    <!-- History Table -->
+    <div class="card">
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Medicine</th>
+              <th>Date</th>
+              <th>Time</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="history-tbody">
+            <tr><td colspan="5" style="text-align:center;padding:40px;color:var(--muted)">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script src="script.js"></script>
+<script>
+  const API   = (location.protocol === "file:" ? "http://127.0.0.1:8000" : location.origin);
+  const token = localStorage.getItem("token");
+  if (!token) window.location.href = "index.html";
+
+  const username = localStorage.getItem("username") || "User";
+  document.getElementById("user-name").textContent   = username;
+  document.getElementById("user-avatar").textContent = username.charAt(0).toUpperCase();
+
+  function logout() { for (const key of ["token", "user_id", "username"]) localStorage.removeItem(key); window.location.href = "index.html"; }
+  function closeToast() { document.getElementById("toast").classList.remove("show"); }
+
+  let allHistory = [];
+
+  function formatTime12(t) {
+    if (!t) return "–";
+    const [h, m] = t.split(":").map(Number);
+    return `${String(h % 12 || 12).padStart(2,"0")}:${String(m).padStart(2,"0")} ${h >= 12 ? "PM" : "AM"}`;
+  }
+
+  function statusBadge(s) {
+    if (s === "taken")   return '<span class="badge badge-success">✅ Taken</span>';
+    if (s === "skipped") return '<span class="badge badge-danger">⏭️ Skipped</span>';
+    return `<span class="badge badge-info">${escapeHtml(s)}</span>`;
+  }
+
+  async function loadHistory() {
+    const tbody = document.getElementById("history-tbody");
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--muted)">Loading…</td></tr>';
+
+    try {
+      const res  = await fetch(`${API}/history`, { headers: { Authorization: token } });
+      const data = await res.json();
+      allHistory = data.history || [];
+
+      // Update summary counters
+      const taken   = allHistory.filter(h => h.status === "taken").length;
+      const skipped = allHistory.filter(h => h.status === "skipped").length;
+      document.getElementById("h-total").textContent   = allHistory.length;
+      document.getElementById("h-taken").textContent   = taken;
+      document.getElementById("h-skipped").textContent = skipped;
+
+      applyFilter();
+    } catch (e) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--danger)">Failed to load history.</td></tr>';
+    }
+  }
+
+  function renderTable(records) {
+    const tbody = document.getElementById("history-tbody");
+
+    if (!records.length) {
+      tbody.innerHTML = `<tr><td colspan="5">
+        <div class="empty-state">
+          <div class="empty-icon">📭</div>
+          <p>No history records found.</p>
+        </div></td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = records.map((h, i) => `
+      <tr>
+        <td>${i + 1}</td>
+        <td><strong>${escapeHtml(h.medicine_name || "–")}</strong></td>
+        <td>${escapeHtml(h.taken_date || "–")}</td>
+        <td>${formatTime12(h.taken_time)}</td>
+        <td>${statusBadge(h.status)}</td>
+      </tr>`).join("");
+  }
+
+  function applyFilter() {
+    const filter = document.getElementById("filter-status").value;
+    if (filter === "all") {
+      renderTable(allHistory);
+    } else {
+      renderTable(allHistory.filter(h => h.status === filter));
+    }
+  }
+
+  loadHistory();
+</script>
+
+</body>
+</html>

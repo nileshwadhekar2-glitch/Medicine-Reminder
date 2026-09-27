@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MediRemind – Dashboard</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- ── Toast Notification ── -->
+<div class="toast" id="toast">
+  <span id="toast-icon">💊</span>
+  <span id="toast-msg">Notification</span>
+  <span class="toast-close" onclick="closeToast()">✕</span>
+</div>
+
+<div class="page-wrapper">
+
+  <!-- ── Sidebar ── -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-icon">💊</div>
+      <h1>Medi<span>Remind</span></h1>
+    </div>
+    <nav class="sidebar-nav">
+      <a class="nav-item active" href="dashboard.html"><span class="icon">🏠</span> Dashboard</a>
+      <a class="nav-item" href="medicines.html">   <span class="icon">💉</span> My Medicines</a>
+      <a class="nav-item" href="add-medicine.html"><span class="icon">➕</span> Add Medicine</a>
+      <a class="nav-item" href="schedule.html">    <span class="icon">📅</span> Today's Schedule</a>
+      <a class="nav-item" href="history.html">     <span class="icon">📋</span> Dose History</a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-info">
+        <div class="user-avatar" id="user-avatar">U</div>
+        <div>
+          <div class="user-name"  id="user-name">Loading…</div>
+          <div class="user-email"><a href="#" onclick="logout()" style="color:var(--danger);font-size:11px">Logout</a></div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── Main Content ── -->
+  <main class="main-content">
+
+    <!-- Page Header -->
+    <div class="page-header">
+      <h2>👋 Welcome back, <span id="greeting-name">User</span>!</h2>
+      <p id="today-date">Loading date…</p>
+    </div>
+
+    <!-- Stats Grid -->
+    <div class="stats-grid" id="stats-grid">
+      <div class="stat-card">
+        <div class="stat-icon blue">💊</div>
+        <div><div class="stat-value" id="stat-total">–</div><div class="stat-label">Total Medicines</div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon teal">📅</div>
+        <div><div class="stat-value" id="stat-today">–</div><div class="stat-label">Today's Reminders</div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon green">✅</div>
+        <div><div class="stat-value" id="stat-taken">–</div><div class="stat-label">Taken Today</div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon amber">⏰</div>
+        <div><div class="stat-value" id="stat-pending">–</div><div class="stat-label">Pending Today</div></div>
+      </div>
+    </div>
+
+    <!-- Two-column bottom row -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;">
+
+      <!-- Upcoming Reminders -->
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <h3 style="font-size:16px;font-weight:700">⏰ Upcoming Today</h3>
+          <a href="schedule.html" class="btn btn-outline btn-sm">View All</a>
+        </div>
+        <div id="upcoming-list">
+          <div class="empty-state"><div class="empty-icon">📭</div><p>Loading…</p></div>
+        </div>
+      </div>
+
+      <!-- Quick Actions -->
+      <div class="card">
+        <h3 style="font-size:16px;font-weight:700;margin-bottom:16px">⚡ Quick Actions</h3>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <a href="add-medicine.html" class="btn btn-primary btn-full">➕ Add New Medicine</a>
+          <a href="schedule.html"     class="btn btn-teal btn-full">📅 View Today's Schedule</a>
+          <a href="medicines.html"    class="btn btn-outline btn-full">💉 Manage Medicines</a>
+          <a href="history.html"      class="btn btn-outline btn-full">📋 View Dose History</a>
+        </div>
+      </div>
+
+    </div>
+
+  </main><!-- /main-content -->
+</div><!-- /page-wrapper -->
+
+<script src="script.js"></script>
+<script>
+  const API = (location.protocol === "file:" ? "http://127.0.0.1:8000" : location.origin);
+
+  // ── Auth guard ──
+  const token = localStorage.getItem("token");
+  if (!token) window.location.href = "index.html";
+
+  // ── Set username ──
+  const username = localStorage.getItem("username") || "User";
+  document.getElementById("greeting-name").textContent = username;
+  document.getElementById("user-name").textContent = username;
+  document.getElementById("user-avatar").textContent = username.charAt(0).toUpperCase();
+
+  // ── Today's date ──
+  const now = new Date();
+  document.getElementById("today-date").textContent =
+    now.toLocaleDateString("en-IN", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+
+  // ── Logout ──
+  function logout() {
+    for (const key of ["token", "user_id", "username"]) localStorage.removeItem(key);
+    window.location.href = "index.html";
+  }
+
+  // ── Toast ──
+  function showToast(msg, isReminder = false) {
+    const el = document.getElementById("toast");
+    document.getElementById("toast-msg").textContent = msg;
+    el.classList.toggle("reminder-toast", isReminder);
+    el.classList.add("show");
+    setTimeout(() => el.classList.remove("show"), 5000);
+  }
+  function closeToast() { document.getElementById("toast").classList.remove("show"); }
+
+  // ── Load dashboard stats ──
+  async function loadStats() {
+    try {
+      const res  = await fetch(`${API}/dashboard/stats`, { headers: { Authorization: token } });
+      const data = await res.json();
+      document.getElementById("stat-total").textContent   = data.total_medicines;
+      document.getElementById("stat-today").textContent   = data.todays_reminders;
+      document.getElementById("stat-taken").textContent   = data.taken_today;
+      document.getElementById("stat-pending").textContent = data.pending_today;
+    } catch (e) {
+      console.error("Stats error:", e);
+    }
+  }
+
+  // ── Load upcoming pending reminders ──
+  async function loadUpcoming() {
+    const container = document.getElementById("upcoming-list");
+    try {
+      const res  = await fetch(`${API}/reminders/today`, { headers: { Authorization: token } });
+      const data = await res.json();
+      const pending = (data.reminders || []).filter(r => r.status === "pending");
+
+      if (!pending.length) {
+        container.innerHTML = '<div class="empty-state"><div class="empty-icon">🎉</div><p>All done for today!</p></div>';
+        return;
+      }
+
+      container.innerHTML = pending.slice(0, 4).map(r => `
+        <div class="schedule-card" style="margin-bottom:10px">
+          <div class="schedule-time">${formatTime(r.scheduled_time)}</div>
+          <div class="schedule-divider"></div>
+          <div class="schedule-info">
+            <div class="schedule-name">${escapeHtml(r.medicines?.name || "Medicine")}</div>
+            <div class="schedule-dosage">${escapeHtml(r.medicines?.dosage || "")}</div>
+          </div>
+          <span class="badge badge-warning">Pending</span>
+        </div>`).join("");
+    } catch (e) {
+      container.innerHTML = '<p style="color:var(--muted);font-size:13px">Could not load reminders.</p>';
+    }
+  }
+
+  // ── Reminder checker (runs every minute) ──
+  function checkReminders(reminders) {
+    const now   = new Date();
+    const hhmm  = now.toTimeString().slice(0, 5);   // "HH:MM"
+
+    reminders.forEach(r => {
+      if (r.status === "pending" && r.scheduled_time.slice(0, 5) === hhmm && shouldNotify(r)) {
+        const name = r.medicines?.name || "your medicine";
+        showToast(`⏰ Time to take: ${name}`, true);
+      }
+    });
+  }
+
+  async function startReminderChecker() {
+    try {
+      const res  = await fetch(`${API}/reminders/today`, { headers: { Authorization: token } });
+      const data = await res.json();
+      checkReminders(data.reminders || []);
+    } catch (_) {}
+  }
+
+  function formatTime(t) {
+    if (!t) return "";
+    const [h, m] = t.split(":").map(Number);
+    const ampm = h >= 12 ? "PM" : "AM";
+    const hr   = h % 12 || 12;
+    return `${String(hr).padStart(2,"0")}:${String(m).padStart(2,"0")} ${ampm}`;
+  }
+
+  // ── Init ──
+  loadStats();
+  loadUpcoming();
+  startReminderChecker();
+  setInterval(startReminderChecker, 60000);   // check every 60 seconds
+</script>
+
+</body>
+</html>

@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MediRemind – Today's Schedule</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- Toast (also used as reminder popup) -->
+<div class="toast" id="toast">
+  <span id="toast-icon">💊</span>
+  <span id="toast-msg">Notification</span>
+  <span class="toast-close" onclick="closeToast()">✕</span>
+</div>
+
+<div class="page-wrapper">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-icon">💊</div>
+      <h1>Medi<span>Remind</span></h1>
+    </div>
+    <nav class="sidebar-nav">
+      <a class="nav-item" href="dashboard.html">     <span class="icon">🏠</span> Dashboard</a>
+      <a class="nav-item" href="medicines.html">     <span class="icon">💉</span> My Medicines</a>
+      <a class="nav-item" href="add-medicine.html">  <span class="icon">➕</span> Add Medicine</a>
+      <a class="nav-item active" href="schedule.html"><span class="icon">📅</span> Today's Schedule</a>
+      <a class="nav-item" href="history.html">       <span class="icon">📋</span> Dose History</a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-info">
+        <div class="user-avatar" id="user-avatar">U</div>
+        <div>
+          <div class="user-name" id="user-name">User</div>
+          <div class="user-email"><a href="#" onclick="logout()" style="color:var(--danger);font-size:11px">Logout</a></div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content">
+
+    <div class="page-header" style="display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <h2>📅 Today's Schedule</h2>
+        <p id="today-date">Loading date…</p>
+      </div>
+      <button class="btn btn-outline" onclick="loadSchedule()">🔄 Refresh</button>
+    </div>
+
+    <!-- Summary row -->
+    <div class="stats-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:24px">
+      <div class="stat-card">
+        <div class="stat-icon blue">📋</div>
+        <div><div class="stat-value" id="s-total">–</div><div class="stat-label">Total Today</div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon green">✅</div>
+        <div><div class="stat-value" id="s-taken">–</div><div class="stat-label">Taken</div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon amber">⏳</div>
+        <div><div class="stat-value" id="s-pending">–</div><div class="stat-label">Pending</div></div>
+      </div>
+    </div>
+
+    <!-- Schedule List -->
+    <div class="card">
+      <div id="schedule-list">
+        <div class="empty-state"><div class="empty-icon">⏳</div><p>Loading…</p></div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script src="script.js"></script>
+<script>
+  const API   = (location.protocol === "file:" ? "http://127.0.0.1:8000" : location.origin);
+  const token = localStorage.getItem("token");
+  if (!token) window.location.href = "index.html";
+
+  const username = localStorage.getItem("username") || "User";
+  document.getElementById("user-name").textContent   = username;
+  document.getElementById("user-avatar").textContent = username.charAt(0).toUpperCase();
+  document.getElementById("today-date").textContent  =
+    new Date().toLocaleDateString("en-IN", { weekday:"long", year:"numeric", month:"long", day:"numeric" });
+
+  function logout() { for (const key of ["token", "user_id", "username"]) localStorage.removeItem(key); window.location.href = "index.html"; }
+
+  function showToast(msg, isReminder = false) {
+    const el = document.getElementById("toast");
+    document.getElementById("toast-msg").textContent = msg;
+    el.classList.toggle("reminder-toast", isReminder);
+    el.classList.add("show");
+    setTimeout(() => el.classList.remove("show"), 5000);
+  }
+  function closeToast() { document.getElementById("toast").classList.remove("show"); }
+
+  function formatTime(t) {
+    if (!t) return "–";
+    const [h, m] = t.split(":").map(Number);
+    return `${String(h % 12 || 12).padStart(2,"0")}:${String(m).padStart(2,"0")} ${h >= 12 ? "PM" : "AM"}`;
+  }
+
+  function statusBadge(status) {
+    if (status === "taken")   return '<span class="badge badge-success">✅ Taken</span>';
+    if (status === "skipped") return '<span class="badge badge-danger">⏭️ Skipped</span>';
+    return '<span class="badge badge-warning">⏳ Pending</span>';
+  }
+
+  let remindersCache = [];
+
+  async function loadSchedule() {
+    const container = document.getElementById("schedule-list");
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon">⏳</div><p>Loading…</p></div>';
+
+    try {
+      const res  = await fetch(`${API}/reminders/today`, { headers: { Authorization: token } });
+      const data = await res.json();
+      remindersCache = data.reminders || [];
+
+      const total   = remindersCache.length;
+      const taken   = remindersCache.filter(r => r.status === "taken").length;
+      const pending = remindersCache.filter(r => r.status === "pending").length;
+
+      document.getElementById("s-total").textContent   = total;
+      document.getElementById("s-taken").textContent   = taken;
+      document.getElementById("s-pending").textContent = pending;
+
+      if (!total) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon">📭</div>
+            <p>No reminders for today. <a href="add-medicine.html" style="color:var(--primary)">Add a medicine</a> to get started.</p>
+          </div>`;
+        return;
+      }
+
+      container.innerHTML = '<div class="schedule-list">' +
+        remindersCache.map(r => `
+          <div class="schedule-card" id="card-${r.id}">
+            <div class="schedule-time">${formatTime(r.scheduled_time)}</div>
+            <div class="schedule-divider"></div>
+            <div class="schedule-info">
+              <div class="schedule-name">${escapeHtml(r.medicines?.name || "Medicine")}</div>
+              <div class="schedule-dosage">${escapeHtml(r.medicines?.dosage || "")}</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px">
+              ${statusBadge(r.status)}
+              ${r.status === "pending" ? `
+                <button class="btn btn-success btn-sm" onclick="updateStatus(${r.id}, 'taken',   remindersCache.find(r => r.id === ${r.id}).medicines?.name)">✅ Taken</button>
+                <button class="btn btn-warning btn-sm" onclick="updateStatus(${r.id}, 'skipped', remindersCache.find(r => r.id === ${r.id}).medicines?.name)">⏭️ Skip</button>
+              ` : ""}
+            </div>
+          </div>`).join("") +
+      '</div>';
+
+    } catch (e) {
+      container.innerHTML = '<p style="text-align:center;color:var(--danger);padding:30px">Failed to load schedule.</p>';
+    }
+  }
+
+  async function updateStatus(reminderId, status, medicineName) {
+    try {
+      const res = await fetch(`${API}/reminders/${reminderId}/status`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: token },
+        body: JSON.stringify({ status, medicine_name: medicineName }),
+      });
+      if (!res.ok) throw new Error("Update failed");
+
+      showToast(status === "taken"
+        ? `✅ "${medicineName}" marked as taken!`
+        : `⏭️ "${medicineName}" skipped`
+      );
+      loadSchedule();
+    } catch (e) {
+      showToast("❌ Failed to update status");
+    }
+  }
+
+  // ── Reminder checker ──
+  function checkReminders() {
+    const now  = new Date();
+    const hhmm = now.toTimeString().slice(0, 5);
+    remindersCache.forEach(r => {
+      if (r.status === "pending" && r.scheduled_time.slice(0, 5) === hhmm && shouldNotify(r)) {
+        showToast(`⏰ Time to take: ${r.medicines?.name || "your medicine"}`, true);
+      }
+    });
+  }
+
+  loadSchedule().then(checkReminders);
+  setInterval(async () => { await loadSchedule(); checkReminders(); }, 30000);
+</script>
+
+</body>
+</html>
